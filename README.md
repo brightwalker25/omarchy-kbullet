@@ -110,6 +110,15 @@ This requires Kbullet 2.1.0 or newer, which sets a real Wayland `app_id`. Older
 builds report their class as `python3`, so the focuser falls back to matching
 their exact `Kbullet - YYYY-MM-DD` title.
 
+The focuser also handles the case where Kbullet is hidden in the system tray.
+Closing Kbullet's window hides it rather than quitting it, which leaves a
+running process with no window to focus. Simply launching again would produce a
+second instance, and because each instance holds today's file in memory and
+rewrites it in full on every change, the two would overwrite each other's
+entries. Kbullet exposes no IPC, so a hidden instance cannot be raised from
+outside. The focuser therefore replaces it, which is safe because Kbullet writes
+every change to disk as it happens and never holds unsaved work.
+
 ## Summoning the panel from a keybinding
 
 The panel exposes an IPC target. Add this to `~/.config/hypr/bindings.lua`:

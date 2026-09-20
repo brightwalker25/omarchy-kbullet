@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
 #
-# Focus the Kbullet window, or launch it if it isn't running.
+# Focus the Kbullet window, or launch it if it is not running.
 #
 # Omarchy ships `omarchy-launch-or-focus`, but it matches its pattern against
 # the window class or the title, using a word-boundary regular expression.
@@ -17,6 +17,7 @@ set -euo pipefail
 
 CLASS="kbullet"
 LAUNCH="kbullet"
+PROC='^(python3? )?/usr/bin/kbullet$'
 
 address=$(
   hyprctl clients -j |
@@ -24,7 +25,7 @@ address=$(
       [ .[] | select(
           (.class == $c)
           or (.initialClass == $c)
-          or (.title | test("^Kbullet - \\d{4}-\\d{2}-\\d{2}$"))
+          or ((.title // "") | test("^Kbullet - \\d{4}-\\d{2}-\\d{2}$"))
         ) | .address ] | first // empty
     '
 )
@@ -33,6 +34,22 @@ if [[ -n $address ]]; then
   hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })" >/dev/null 2>&1 ||
     hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1
   exit 0
+fi
+
+# No window, but the process may still be running: closing Kbullet's window
+# hides it to the system tray rather than quitting it. Launching again in that
+# state would leave two instances, each holding today's file in memory and
+# overwriting the other's entries whenever either one saves.
+#
+# A tray-hidden Kbullet cannot be raised from outside, because it exposes no
+# IPC, so replace it instead. That is safe: Kbullet writes every change to disk
+# as it happens and so never holds unsaved state.
+if pgrep -f "$PROC" >/dev/null 2>&1; then
+  pkill -f "$PROC" || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    pgrep -f "$PROC" >/dev/null 2>&1 || break
+    sleep 0.2
+  done
 fi
 
 exec setsid uwsm-app -- "$LAUNCH"

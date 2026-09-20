@@ -258,6 +258,8 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function refresh(): void { root.poll() }
+    function openApp(): void { root.openKbullet() }
+    function capture(): void { root.quickCapture() }
   }
 
   // ------------------------------------------------------------- components
