@@ -139,4 +139,5 @@ This plugin is licensed under the MIT licence. See [LICENSE](LICENSE).
 
 The panel and bar-widget scaffolding is derived from Omarchy's own
 `omarchy.weather` and `omarchy.agents` plugins, which are MIT licensed and
-Copyright (c) David Heinemeier Hansson.
+Copyright (c) David Heinemeier Hansson. Their notice is reproduced in
+[NOTICE](NOTICE).
