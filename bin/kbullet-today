@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""
+Read today's Kbullet journal file and emit it as JSON for the bar plugin.
+
+All the format knowledge lives here rather than in the QML: where the journal
+is, how a day file is laid out, and what each symbol means. The panel draws
+whatever this hands it, so a change to Kbullet's format is a change to this file
+alone.
+
+It runs from a terminal with no compositor involved:
+
+    bin/kbullet-today --pretty
+    bin/kbullet-today --text
+    bin/kbullet-today --count-only
+"""
+
+import argparse
+import configparser
+import json
+import os
+import re
+import sys
+import time
+from datetime import date
+from pathlib import Path
+
+SETTINGS = Path.home() / ".config" / "Kbullet" / "Settings.conf"
+DEFAULT_JOURNAL = Path.home() / "Documents" / "Kbullet"
+
+SECTIONS = ("Morning", "Afternoon", "Evening")
+
+# Kbullet's notation. The name is what the panel keys its colours off, so QML
+# never has to handle a raw symbol character.
+SYMBOLS = {
+    "•": "task",       # •
+    "○": "event",      # ○
+    "—": "note",       # —
+    "=": "mood",
+    "!": "urgent",
+    "*": "priority",
+    "×": "done",       # ×
+    ">": "migrated",
+    "<": "scheduled",
+    "\\": "delegated",
+    "|": "waiting",
+}
+
+# An entry that is finished, or that has moved on. Not something still owed
+# today.
+CLOSED = {"done", "migrated", "scheduled", "delegated", "waiting"}
+
+ENTRY_RE = re.compile(r"^(?P<sym>.)\s*(?:\[(?P<time>\d{1,2}:\d{2})\]\s*)?(?P<text>.*)$")
+
+
+def journal_dir(override=""):
+    """Resolve the journal directory: explicit override, then Kbullet's own
+    QSettings file, then Kbullet's default."""
+    if override:
+        return Path(os.path.expanduser(override))
+    try:
+        cp = configparser.ConfigParser(interpolation=None)
+        cp.read(SETTINGS, encoding="utf-8")
+        value = cp.get("General", "journal_dir", fallback="").strip()
+        if value:
+            return Path(os.path.expanduser(value))
+    except (configparser.Error, OSError):
+        pass
+    return DEFAULT_JOURNAL
+
+
+def parse_day(text):
+    """Split a day file into sections. Mirrors Kbullet's own parser: only
+    section headers and lines starting with a known symbol carry meaning."""
+    sections = {s: [] for s in SECTIONS}
+    current = SECTIONS[0]
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("## "):
+            name = line[3:].strip()
+            if name in sections:
+                current = name
+            continue
+        if not line or line[0] not in SYMBOLS:
+            continue
+
+        m = ENTRY_RE.match(line)
+        if not m:
+            continue
+        kind = SYMBOLS[line[0]]
+        sections[current].append({
+            "section": current,
+            "symbol": line[0],
+            "kind": kind,
+            "time": m.group("time") or "",
+            "text": (m.group("text") or "").strip(),
+            "done": kind == "done",
+        })
+
+    return sections
+
+
+def collect(override="", when=None):
+    day = when or date.today()
+    root = journal_dir(override)
+    path = root / f"{day:%Y-%m-%d}.md"
+
+    report = {
+        "generatedAt": int(time.time()),
+        "date": f"{day:%Y-%m-%d}",
+        "journalDir": str(root),
+        "file": str(path),
+        "exists": False,
+        "syncing": False,
+        "openTasks": 0,
+        "urgent": 0,
+        "counts": {},
+        "sections": list(SECTIONS),
+        "entries": [],
+        "errors": [],
+    }
+
+    if not path.exists():
+        # A day with nothing written yet is an empty day, not an error.
+        return report
+
+    report["exists"] = True
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        report["errors"].append(f"Could not read {path.name}: {exc}")
+        return report
+
+    # The journal may sit in a synced folder, where writing to a temporary file
+    # and renaming it can briefly present an empty file. Report that, rather
+    # than drawing a day that looks as though it has been wiped.
+    if text.strip() == "" and path.stat().st_size == 0:
+        report["syncing"] = True
+        return report
+
+    sections = parse_day(text)
+    entries = [e for s in SECTIONS for e in sections[s]]
+    report["entries"] = entries
+
+    counts = {}
+    for e in entries:
+        counts[e["kind"]] = counts.get(e["kind"], 0) + 1
+    report["counts"] = counts
+    report["openTasks"] = sum(
+        1 for e in entries if e["kind"] not in CLOSED and e["kind"] != "note"
+    )
+    report["urgent"] = counts.get("urgent", 0)
+
+    return report
+
+
+def as_text(rep):
+    out = []
+    head = f"{rep['date']}  |  {rep['openTasks']} open"
+    if rep["urgent"]:
+        head += f", {rep['urgent']} urgent"
+    out.append(head)
+    if not rep["exists"]:
+        out.append("  (nothing written today)")
+        return "\n".join(out)
+    for section in rep["sections"]:
+        items = [e for e in rep["entries"] if e["section"] == section]
+        out.append(f"\n{section.upper()}")
+        if not items:
+            out.append("  nothing yet")
+        for e in items:
+            stamp = f"{e['time']:>5}  " if e["time"] else " " * 7
+            out.append(f"  {e['symbol']} {stamp}{e['text']}")
+    for err in rep["errors"]:
+        out.append(f"\n! {err}")
+    return "\n".join(out)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    ap.add_argument("--journal-dir", default="",
+                    help="override the journal folder")
+    ap.add_argument("--date", default="",
+                    help="read a different day (YYYY-MM-DD)")
+    ap.add_argument("--pretty", action="store_true", help="indent the JSON")
+    ap.add_argument("--text", action="store_true",
+                    help="human-readable output instead of JSON")
+    ap.add_argument("--count-only", action="store_true",
+                    help="emit just the counts, for the bar badge")
+    args = ap.parse_args()
+
+    when = None
+    if args.date:
+        try:
+            when = date.fromisoformat(args.date)
+        except ValueError:
+            print(f"Not a date: {args.date}", file=sys.stderr)
+            return 2
+
+    rep = collect(args.journal_dir, when)
+
+    if args.text:
+        print(as_text(rep))
+    elif args.count_only:
+        json.dump({k: rep[k] for k in
+                   ("generatedAt", "date", "openTasks", "urgent", "exists")},
+                  sys.stdout)
+        print()
+    else:
+        json.dump(rep, sys.stdout, indent=2 if args.pretty else None,
+                  ensure_ascii=False)
+        print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

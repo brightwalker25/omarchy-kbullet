@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+#
+# Focus the Kbullet window, or launch it if it isn't running.
+#
+# Omarchy ships `omarchy-launch-or-focus`, but it matches its pattern against
+# the window class or the title, using a word-boundary regular expression.
+# "kbullet" appears in the title of any browser tab showing the repository, any
+# editor holding kbullet.py, and any terminal running the command. The helper
+# will happily focus one of those instead of the app. This script matches the
+# window class exactly.
+#
+# The title fallback exists for Kbullet builds before the app_id fix, which
+# report as class "python3"; their title is "Kbullet - YYYY-MM-DD".
+
+set -euo pipefail
+
+CLASS="kbullet"
+LAUNCH="kbullet"
+
+address=$(
+  hyprctl clients -j |
+    jq -r --arg c "$CLASS" '
+      [ .[] | select(
+          (.class == $c)
+          or (.initialClass == $c)
+          or (.title | test("^Kbullet - \\d{4}-\\d{2}-\\d{2}$"))
+        ) | .address ] | first // empty
+    '
+)
+
+if [[ -n $address ]]; then
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })" >/dev/null 2>&1 ||
+    hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1
+  exit 0
+fi
+
+exec setsid uwsm-app -- "$LAUNCH"

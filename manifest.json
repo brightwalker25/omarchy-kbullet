@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "brightwalker25.kbullet",
+  "name": "Kbullet",
+  "version": "0.1.0",
+  "author": "brightwalker25",
+  "license": "MIT",
+  "description": "Today's bullet journal in the bar: tasks, events and notes, with the open count at a glance",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "barWidget": {
+    "displayName": "Kbullet",
+    "description": "Today's tasks, events and notes from the Kbullet journal, with quick capture and a jump into the app",
+    "category": "Productivity",
+    "aliases": ["kbullet", "journal", "bullet", "tasks", "todo", "bujo"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalMs": 30000,
+      "backgroundIntervalMs": 300000,
+      "showCount": true,
+      "hideDone": false,
+      "journalDir": ""
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalMs",
+        "type": "integer",
+        "label": "Refresh while open (ms)",
+        "min": 5000,
+        "max": 300000,
+        "step": 5000,
+        "defaultValue": 30000,
+        "description": "How often the panel re-reads the journal while it is open."
+      },
+      {
+        "key": "backgroundIntervalMs",
+        "type": "integer",
+        "label": "Badge refresh (ms)",
+        "min": 60000,
+        "max": 3600000,
+        "step": 60000,
+        "defaultValue": 300000,
+        "description": "How often the open-task count refreshes with the panel closed. The folder is also watched, so this is only a backstop."
+      },
+      {
+        "key": "showCount",
+        "type": "bool",
+        "label": "Show open-task count in the bar",
+        "defaultValue": true
+      },
+      {
+        "key": "hideDone",
+        "type": "bool",
+        "label": "Hide completed entries",
+        "defaultValue": false,
+        "description": "Off by default: seeing what you finished is half the point of a journal."
+      },
+      {
+        "key": "journalDir",
+        "type": "path",
+        "label": "Journal folder",
+        "defaultValue": "",
+        "description": "Leave empty to read journal_dir from ~/.config/Kbullet/Settings.conf."
+      }
+    ]
+  }
+}
