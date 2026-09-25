@@ -142,6 +142,11 @@ available.
   between releases.
 - Third-party plugins are not sandboxed inside `omarchy-shell`.
 
+## Written with AI help
+
+This was written with help from AI. I have checked the code, but if you would
+prefer not to use it because AI was involved, that is your choice.
+
 ## Licence
 
 This plugin is licensed under the MIT licence. See [LICENSE](LICENSE).

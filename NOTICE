@@ -4,7 +4,7 @@ Third-party notices
 This plugin is MIT licensed. See LICENSE for its terms.
 
 The bar widget and parts of the panel in this repository are derived from the
-shell plugins shipped with Omarchy (https://github.com/basecamp/omarchy), which
+shell plugins shipped with Omarchy (https://github.com/omacom/omarchy), which
 is MIT licensed. Its notice is reproduced below as required.
 
   Copyright (c) David Heinemeier Hansson
